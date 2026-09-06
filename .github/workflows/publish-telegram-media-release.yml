@@ -1,0 +1,49 @@
+name: Publish Telegram media release
+
+on:
+  push:
+    branches:
+      - telegram-media-release-1
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download tested Phone artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release/phone
+          gh run download 34057988915 -n NotificationMirror-Phone-TelegramMediaFix -D release/phone
+
+      - name: Download tested Watch artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release/watch
+          gh run download 34057988915 -n NotificationMirror-Watch-TelegramMediaFix -D release/watch
+
+      - name: Prepare release files
+        run: |
+          cp release/phone/*.apk NotificationMirror-Phone-v1.7.1-telegram-media.1.apk
+          cp release/watch/*.apk NotificationMirror-Watch-v1.7.1-telegram-media.1.apk
+          sha256sum NotificationMirror-Phone-v1.7.1-telegram-media.1.apk NotificationMirror-Watch-v1.7.1-telegram-media.1.apk > SHA256SUMS.txt
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.7.1-telegram-media.1 \
+            --target 35c0aafe6a824cd79aa5a71a1ccbf0e9b9d4715a \
+            --title "NotificationMirror v1.7.1 Telegram Media Fix 1" \
+            --notes "Tested build based on NotificationMirror v1.7.1 source.\n\nChanges:\n- Telegram MessagingStyle image attachments are extracted from Message.dataUri and mirrored to Wear OS.\n- Picture notifications are rendered with BigPictureStyle on the watch.\n- MessagingStyle is used from the first message for more consistent text handling.\n\nConfirmed working on Xiaomi Watch 5 + org.telegram.messenger.web.\n\nThis release contains the exact APK artifacts from successful GitHub Actions run #4 (run id 34057988915)." \
+            NotificationMirror-Phone-v1.7.1-telegram-media.1.apk \
+            NotificationMirror-Watch-v1.7.1-telegram-media.1.apk \
+            SHA256SUMS.txt
