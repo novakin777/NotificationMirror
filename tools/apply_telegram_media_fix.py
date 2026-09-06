@@ -139,6 +139,31 @@ old_picture = '''        } else if (!hideContent && pictureBitmap != null) {
             )
 '''
 w = replace_once(w, old_picture, "", "wear duplicate BigPictureStyle")
+
+# Show full notification content immediately on the watch's lock/glance surface.
+old_category = '''            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setGroup(groupId)
+'''
+new_category = '''            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setGroup(groupId)
+'''
+w = replace_once(w, old_category, new_category, "wear notification visibility")
+
+# For photo notifications, use the message image as the collapsed large icon as well.
+# BigPictureStyle still provides the full expanded image after opening the notification.
+old_large_icon = '''        if (iconBitmap != null) {
+            builder.setLargeIcon(iconBitmap)
+        }
+'''
+new_large_icon = '''        if (pictureBitmap != null) {
+            builder.setLargeIcon(pictureBitmap)
+        } else if (iconBitmap != null) {
+            builder.setLargeIcon(iconBitmap)
+        }
+'''
+w = replace_once(w, old_large_icon, new_large_icon, "wear glance image")
+
 wear.write_text(w)
 
-print("Telegram media source changes applied")
+print("Telegram media + Wear glance preview source changes applied")
