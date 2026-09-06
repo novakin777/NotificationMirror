@@ -1,0 +1,48 @@
+name: Build Telegram media fix
+
+on:
+  push:
+    branches:
+      - telegram-media-fix-build
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Apply Telegram media patch
+        run: git apply --check patches/telegram-messagingstyle-media.patch && git apply patches/telegram-messagingstyle-media.patch
+
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
+      - name: Build phone and watch debug APKs
+        run: ./gradlew --stacktrace :mobile:assembleDebug :wear:assembleDebug
+
+      - name: Upload phone APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotificationMirror-Phone-TelegramMediaFix
+          path: mobile/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload watch APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotificationMirror-Watch-TelegramMediaFix
+          path: wear/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
