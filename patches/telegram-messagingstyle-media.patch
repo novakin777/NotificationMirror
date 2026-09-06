@@ -1,0 +1,93 @@
+diff --git a/mobile/src/main/java/com/notifmirror/mobile/NotificationListener.kt b/mobile/src/main/java/com/notifmirror/mobile/NotificationListener.kt
+index 9119c76..0000000 100644
+--- a/mobile/src/main/java/com/notifmirror/mobile/NotificationListener.kt
++++ b/mobile/src/main/java/com/notifmirror/mobile/NotificationListener.kt
+@@ -6,6 +6,7 @@ import android.content.ComponentName
+ import android.content.Context
+ import android.graphics.Bitmap
++import android.graphics.BitmapFactory
+ import android.os.Build
+ import android.os.PowerManager
+ import android.graphics.Canvas
+@@ -692,11 +693,32 @@ class NotificationListener : NotificationListenerService() {
+      */
+     private fun extractPictureBase64(extras: android.os.Bundle): String? {
+         return try {
+-            // EXTRA_PICTURE is set by BigPictureStyle notifications (photo messages, etc.)
+-            val picture = extras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE) ?: return null
++            // Existing BigPictureStyle path.
++            val bigPicture = extras.getParcelable<Bitmap>(Notification.EXTRA_PICTURE)
++
++            // Telegram and some other messaging apps attach media to
++            // MessagingStyle.Message via setData(mimeType, contentUri) instead of
++            // Notification.EXTRA_PICTURE. Inspect the newest image attachment.
++            val messagingPicture = if (bigPicture == null) {
++                extras.getParcelableArray(Notification.EXTRA_MESSAGES)
++                    ?.asReversed()
++                    ?.firstNotNullOfOrNull { item ->
++                        val bundle = item as? android.os.Bundle ?: return@firstNotNullOfOrNull null
++                        val mime = bundle.getString("type") ?: return@firstNotNullOfOrNull null
++                        if (!mime.startsWith("image/")) return@firstNotNullOfOrNull null
++
++                        val uri = bundle.getParcelable<android.net.Uri>("uri")
++                            ?: return@firstNotNullOfOrNull null
++
++                        try {
++                            contentResolver.openInputStream(uri)?.use { input ->
++                                BitmapFactory.decodeStream(input)
++                            }
++                        } catch (e: Exception) {
++                            Log.w(TAG, "Failed to decode MessagingStyle image: $mime $uri", e)
++                            null
++                        }
++                    }
++            } else null
++
++            val picture = bigPicture ?: messagingPicture ?: return null
+ 
+             // Scale down if too large — Wear MessageClient has a ~100KB payload limit,
+             // and we're already sending icon + actions + messages in the same payload.
+@@ -714,7 +736,7 @@ class NotificationListener : NotificationListenerService() {
+             val baos = ByteArrayOutputStream()
+             scaled.compress(Bitmap.CompressFormat.JPEG, 70, baos)
+             val bytes = baos.toByteArray()
+-            Log.d(TAG, "Extracted notification picture: ${picture.width}x${picture.height} -> ${scaled.width}x${scaled.height}, ${bytes.size} bytes")
++            Log.d(TAG, "Extracted notification picture (BigPicture/MessagingStyle): ${picture.width}x${picture.height} -> ${scaled.width}x${scaled.height}, ${bytes.size} bytes")
+             Base64.encodeToString(bytes, Base64.NO_WRAP)
+         } catch (e: Exception) {
+             Log.w(TAG, "Failed to extract notification picture", e)
+diff --git a/wear/src/main/java/com/notifmirror/wear/NotificationHandler.kt b/wear/src/main/java/com/notifmirror/wear/NotificationHandler.kt
+index ad26558..0000000 100644
+--- a/wear/src/main/java/com/notifmirror/wear/NotificationHandler.kt
++++ b/wear/src/main/java/com/notifmirror/wear/NotificationHandler.kt
+@@ -537,8 +537,16 @@ object NotificationHandler {
+         builder.setSubText(appLabel)
+ 
+-        // Stack conversation messages using MessagingStyle for better WearOS rendering
+-        if (!hideContent && conversationHistory.size > 1) {
++        // Photo/media notifications take priority. A Notification can only have one Style;
++        // previously MessagingStyle won first, making pictureBitmap unreachable for Telegram.
++        if (!hideContent && pictureBitmap != null) {
++            builder.setStyle(
++                NotificationCompat.BigPictureStyle()
++                    .bigPicture(pictureBitmap)
++                    .setSummaryText(displayText)
++            )
++        // Use MessagingStyle even for the first message so text is rendered consistently.
++        } else if (!hideContent && conversationHistory.isNotEmpty()) {
+             val recent = conversationHistory.takeLast(50)
+             val selfPerson = Person.Builder().setName("You").build()
+             val distinctSenders = recent.map { it.first }.distinct()
+@@ -560,13 +568,6 @@ object NotificationHandler {
+             builder.setContentTitle(if (conversationTitle.isNotEmpty()) conversationTitle else title)
+             builder.setSubText(appLabel)
+-        } else if (!hideContent && pictureBitmap != null) {
+-            // BigPictureStyle for notifications with attached images (e.g. photo messages)
+-            builder.setStyle(
+-                NotificationCompat.BigPictureStyle()
+-                    .bigPicture(pictureBitmap)
+-                    .setSummaryText(text)
+-            )
+         } else if (!hideContent && text.length > bigTextThreshold) {
+             builder.setStyle(NotificationCompat.BigTextStyle().bigText(text))
+         }
