@@ -84,8 +84,6 @@ new_func = '''    private fun extractPictureBase64(extras: android.os.Bundle): S
 
             val picture = bigPicture ?: messagingPicture ?: return null
 
-            // Scale down if too large — Wear MessageClient has a ~100KB payload limit,
-            // and we're already sending icon + actions + messages in the same payload.
             val maxDim = 400
             val scaled = if (picture.width > maxDim || picture.height > maxDim) {
                 val ratio = minOf(maxDim.toFloat() / picture.width, maxDim.toFloat() / picture.height)
@@ -114,33 +112,7 @@ mobile.write_text(s)
 wear = Path("wear/src/main/java/com/notifmirror/wear/NotificationHandler.kt")
 w = wear.read_text()
 
-old_start = '''        // Stack conversation messages using MessagingStyle for better WearOS rendering
-        if (!hideContent && conversationHistory.size > 1) {
-'''
-new_start = '''        // Media takes priority because a notification can have only one Style.
-        // Telegram is MessagingStyle but may also carry an image attachment.
-        if (!hideContent && pictureBitmap != null) {
-            builder.setStyle(
-                NotificationCompat.BigPictureStyle()
-                    .bigPicture(pictureBitmap)
-                    .setSummaryText(displayText)
-            )
-        // Use MessagingStyle even for the first message so its text is shown consistently.
-        } else if (!hideContent && conversationHistory.isNotEmpty()) {
-'''
-w = replace_once(w, old_start, new_start, "wear MessagingStyle condition")
-
-old_picture = '''        } else if (!hideContent && pictureBitmap != null) {
-            // BigPictureStyle for notifications with attached images (e.g. photo messages)
-            builder.setStyle(
-                NotificationCompat.BigPictureStyle()
-                    .bigPicture(pictureBitmap)
-                    .setSummaryText(text)
-            )
-'''
-w = replace_once(w, old_picture, "", "wear duplicate BigPictureStyle")
-
-# Show full notification content immediately on the watch's lock/glance surface.
+# Public visibility: do not let Wear hide the actual message body on the glance surface.
 old_category = '''            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setGroup(groupId)
 '''
@@ -150,8 +122,7 @@ new_category = '''            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
 '''
 w = replace_once(w, old_category, new_category, "wear notification visibility")
 
-# For photo notifications, use the message image as the collapsed large icon as well.
-# BigPictureStyle still provides the full expanded image after opening the notification.
+# Use the transferred photo as the collapsed thumbnail too.
 old_large_icon = '''        if (iconBitmap != null) {
             builder.setLargeIcon(iconBitmap)
         }
@@ -164,6 +135,54 @@ new_large_icon = '''        if (pictureBitmap != null) {
 '''
 w = replace_once(w, old_large_icon, new_large_icon, "wear glance image")
 
+# Wear OS's initial peek for MessagingStyle intentionally emphasizes app/conversation
+# identity and can omit message content. For the watch-side mirror, render messaging
+# notifications as standard text/photo notifications instead. Reply actions and
+# conversation grouping still work because they are independent of the visual Style.
+style_start = '''        // Stack conversation messages using MessagingStyle for better WearOS rendering
+        if (!hideContent && conversationHistory.size > 1) {
+'''
+start = w.find(style_start)
+if start < 0:
+    raise SystemExit("anchor not found: wear style block start")
+
+style_end_marker = '''        if (actionsArray != null) {
+'''
+end = w.find(style_end_marker, start)
+if end < 0:
+    raise SystemExit("anchor not found: wear style block end")
+
+new_style_block = '''        // Prefer the latest actual message content for the immediate Wear OS peek.
+        val latestConversationMessage = conversationHistory.lastOrNull()
+        val peekTitle = latestConversationMessage?.first?.takeIf { it.isNotEmpty() } ?: displayTitle
+        val peekText = latestConversationMessage?.second?.takeIf { it.isNotEmpty() } ?: displayText
+
+        if (!hideContent) {
+            builder.setContentTitle(peekTitle)
+            builder.setContentText(peekText)
+            builder.setTicker(peekText)
+
+            if (pictureBitmap != null) {
+                builder.setStyle(
+                    NotificationCompat.BigPictureStyle()
+                        .bigPicture(pictureBitmap)
+                        .setBigContentTitle(peekTitle)
+                        .setSummaryText(peekText)
+                )
+            } else if (isMessagingStyle || peekText.length > bigTextThreshold) {
+                // Deliberately avoid MessagingStyle here: on Wear OS its initial peek
+                // often shows only the app/conversation name and hides the message body.
+                builder.setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .setBigContentTitle(peekTitle)
+                        .bigText(peekText)
+                )
+            }
+        }
+
+'''
+
+w = w[:start] + new_style_block + w[end:]
 wear.write_text(w)
 
-print("Telegram media + Wear glance preview source changes applied")
+print("Telegram media + Wear immediate-content preview source changes applied")
