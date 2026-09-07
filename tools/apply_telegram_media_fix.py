@@ -195,44 +195,37 @@ old_summary = '''        val summaryBuilder = NotificationCompat.Builder(context
         nm.notify(SUMMARY_TAG, summaryId, summaryBuilder.build())
 '''
 
-new_summary = '''        // MiWearSysUI presents the group summary as the long-lived HUN overlay.
-        // The old summary used appLabel/title only, which exactly produced
-        // "Telegram" + sender name in HUN while hiding the actual message body.
-        // Make the summary carry the latest real content and media as well.
-        val summaryTitle = if (hideContent) appLabel else displayText
-        val summaryText = if (hideContent) displayText else peekText
-        val summaryBuilder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(summaryTitle)
-            .setContentText(summaryText)
-            .setTicker(summaryText)
-            .setSubText(appLabel)
-            .setLargeIcon(pictureBitmap ?: iconBitmap)
-            .setGroup(groupId)
-            .setGroupSummary(true)
-            .setAutoCancel(true)
-            .setSilent(true)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-
-        if (!hideContent && pictureBitmap != null) {
-            summaryBuilder.setStyle(
-                NotificationCompat.BigPictureStyle()
-                    .bigPicture(pictureBitmap)
-                    .setBigContentTitle(summaryTitle)
-                    .setSummaryText(summaryText)
-            )
-        } else if (!hideContent) {
-            summaryBuilder.setStyle(
-                NotificationCompat.BigTextStyle()
-                    .setBigContentTitle(summaryTitle)
-                    .bigText(summaryText)
-            )
+new_summary = '''        // Xiaomi MiWearSysUI turns the group summary into the long-lived HUN.
+        // With only one active child this summary is unnecessary and steals the HUN
+        // from the real notification (including its BigPictureStyle). Suppress it.
+        val activeChildCount = synchronized(idLock) {
+            convKeyToPackage.values.count { it == packageName }
         }
 
-        nm.notify(SUMMARY_TAG, summaryId, summaryBuilder.build())
+        if (activeChildCount > 1) {
+            val summaryBuilder = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(appLabel)
+                .setContentText(title)
+                .setSubText(appLabel)
+                .setGroup(groupId)
+                .setGroupSummary(true)
+                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+                .setAutoCancel(true)
+                .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
+                .setStyle(NotificationCompat.InboxStyle()
+                    .setSummaryText(appLabel))
+            nm.notify(SUMMARY_TAG, summaryId, summaryBuilder.build())
+            Log.d(TAG, "Posted non-alerting group summary for $packageName ($activeChildCount children)")
+        } else {
+            // Remove a stale summary if the package dropped back to one conversation.
+            nm.cancel(SUMMARY_TAG, summaryId)
+            Log.d(TAG, "Suppressed group summary for $packageName; child owns HUN")
+        }
 '''
 
-w = replace_once(w, old_summary, new_summary, "MiWear HUN group summary")
+w = replace_once(w, old_summary, new_summary, "MiWear child-only HUN routing")
 wear.write_text(w)
 
-print("Telegram media + MiWear HUN summary source changes applied")
+print("Telegram media + MiWear child-only HUN routing source changes applied")
