@@ -1,9 +1,9 @@
-name: Build MiWear HUN summary fix
+name: Build MiWear child-only HUN fix
 
 on:
   push:
     branches:
-      - wear-hun-summary-fix
+      - wear-hun-child-only-fix
   workflow_dispatch:
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Apply Telegram media and MiWear HUN summary changes
+      - name: Apply Telegram media and MiWear child-only HUN changes
         run: python3 tools/apply_telegram_media_fix.py
 
       - name: Verify source diff
@@ -39,13 +39,13 @@ jobs:
       - name: Upload phone APK
         uses: actions/upload-artifact@v4
         with:
-          name: NotificationMirror-Phone-MiWearHunSummaryFix
+          name: NotificationMirror-Phone-MiWearChildHunFix
           path: mobile/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Upload watch APK
         uses: actions/upload-artifact@v4
         with:
-          name: NotificationMirror-Watch-MiWearHunSummaryFix
+          name: NotificationMirror-Watch-MiWearChildHunFix
           path: wear/build/outputs/apk/debug/*.apk
           if-no-files-found: error
