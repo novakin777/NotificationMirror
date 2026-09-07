@@ -146,9 +146,7 @@ end = w.find(style_end_marker, start)
 if end < 0:
     raise SystemExit("anchor not found: wear style block end")
 
-new_style_block = '''        // Xiaomi Watch 5's interruption screen only displays the notification title.
-        // Put the latest message directly into android.title so the text is visible
-        // immediately, while keeping contentText/BigTextStyle for the notification shade.
+new_style_block = '''        // Keep the previously working child-notification rendering.
         val latestConversationMessage = conversationHistory.lastOrNull()
         val senderName = latestConversationMessage?.first?.takeIf { it.isNotEmpty() } ?: displayTitle
         val peekText = latestConversationMessage?.second?.takeIf { it.isNotEmpty() } ?: displayText
@@ -182,6 +180,59 @@ new_style_block = '''        // Xiaomi Watch 5's interruption screen only displa
 '''
 
 w = w[:start] + new_style_block + w[end:]
+
+old_summary = '''        val summaryBuilder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(appLabel)
+            .setContentText(title)
+            .setSubText(appLabel)
+            .setGroup(groupId)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .setSilent(true)
+            .setStyle(NotificationCompat.InboxStyle()
+                .setSummaryText(appLabel))
+        nm.notify(SUMMARY_TAG, summaryId, summaryBuilder.build())
+'''
+
+new_summary = '''        // MiWearSysUI presents the group summary as the long-lived HUN overlay.
+        // The old summary used appLabel/title only, which exactly produced
+        // "Telegram" + sender name in HUN while hiding the actual message body.
+        // Make the summary carry the latest real content and media as well.
+        val summaryTitle = if (hideContent) appLabel else displayText
+        val summaryText = if (hideContent) displayText else peekText
+        val summaryBuilder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(summaryTitle)
+            .setContentText(summaryText)
+            .setTicker(summaryText)
+            .setSubText(appLabel)
+            .setLargeIcon(pictureBitmap ?: iconBitmap)
+            .setGroup(groupId)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .setSilent(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+
+        if (!hideContent && pictureBitmap != null) {
+            summaryBuilder.setStyle(
+                NotificationCompat.BigPictureStyle()
+                    .bigPicture(pictureBitmap)
+                    .setBigContentTitle(summaryTitle)
+                    .setSummaryText(summaryText)
+            )
+        } else if (!hideContent) {
+            summaryBuilder.setStyle(
+                NotificationCompat.BigTextStyle()
+                    .setBigContentTitle(summaryTitle)
+                    .bigText(summaryText)
+            )
+        }
+
+        nm.notify(SUMMARY_TAG, summaryId, summaryBuilder.build())
+'''
+
+w = replace_once(w, old_summary, new_summary, "MiWear HUN group summary")
 wear.write_text(w)
 
-print("Telegram media + Xiaomi Watch title-preview source changes applied")
+print("Telegram media + MiWear HUN summary source changes applied")
