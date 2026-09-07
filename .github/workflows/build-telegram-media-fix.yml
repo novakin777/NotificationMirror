@@ -1,9 +1,9 @@
-name: Build Wear glance preview fix
+name: Build MiWear HUN content fix
 
 on:
   push:
     branches:
-      - wear-glance-preview-fix
+      - wear-hun-content-fix
   workflow_dispatch:
 
 permissions:
@@ -27,6 +27,9 @@ jobs:
       - name: Apply Telegram media and Wear glance source changes
         run: python3 tools/apply_telegram_media_fix.py
 
+      - name: Apply MiWear HUN content mapping
+        run: python3 tools/apply_miwear_hun_fix.py
+
       - name: Verify source diff
         run: git diff --check
 
@@ -39,13 +42,13 @@ jobs:
       - name: Upload phone APK
         uses: actions/upload-artifact@v4
         with:
-          name: NotificationMirror-Phone-WearGlancePreviewFix
+          name: NotificationMirror-Phone-MiWearHunFix
           path: mobile/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Upload watch APK
         uses: actions/upload-artifact@v4
         with:
-          name: NotificationMirror-Watch-WearGlancePreviewFix
+          name: NotificationMirror-Watch-MiWearHunFix
           path: wear/build/outputs/apk/debug/*.apk
           if-no-files-found: error
