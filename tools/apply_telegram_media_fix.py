@@ -112,7 +112,6 @@ mobile.write_text(s)
 wear = Path("wear/src/main/java/com/notifmirror/wear/NotificationHandler.kt")
 w = wear.read_text()
 
-# Public visibility: do not let Wear hide the actual message body on the glance surface.
 old_category = '''            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setGroup(groupId)
 '''
@@ -122,7 +121,6 @@ new_category = '''            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
 '''
 w = replace_once(w, old_category, new_category, "wear notification visibility")
 
-# Use the transferred photo as the collapsed thumbnail too.
 old_large_icon = '''        if (iconBitmap != null) {
             builder.setLargeIcon(iconBitmap)
         }
@@ -135,10 +133,6 @@ new_large_icon = '''        if (pictureBitmap != null) {
 '''
 w = replace_once(w, old_large_icon, new_large_icon, "wear glance image")
 
-# Wear OS's initial peek for MessagingStyle intentionally emphasizes app/conversation
-# identity and can omit message content. For the watch-side mirror, render messaging
-# notifications as standard text/photo notifications instead. Reply actions and
-# conversation grouping still work because they are independent of the visual Style.
 style_start = '''        // Stack conversation messages using MessagingStyle for better WearOS rendering
         if (!hideContent && conversationHistory.size > 1) {
 '''
@@ -152,10 +146,17 @@ end = w.find(style_end_marker, start)
 if end < 0:
     raise SystemExit("anchor not found: wear style block end")
 
-new_style_block = '''        // Prefer the latest actual message content for the immediate Wear OS peek.
+new_style_block = '''        // Xiaomi Watch 5's interruption screen only displays the notification title.
+        // Put the latest message directly into android.title so the text is visible
+        // immediately, while keeping contentText/BigTextStyle for the notification shade.
         val latestConversationMessage = conversationHistory.lastOrNull()
-        val peekTitle = latestConversationMessage?.first?.takeIf { it.isNotEmpty() } ?: displayTitle
+        val senderName = latestConversationMessage?.first?.takeIf { it.isNotEmpty() } ?: displayTitle
         val peekText = latestConversationMessage?.second?.takeIf { it.isNotEmpty() } ?: displayText
+        val peekTitle = if (isMessagingStyle && peekText.isNotEmpty()) {
+            if (senderName.isNotEmpty() && senderName != peekText) "$senderName: $peekText" else peekText
+        } else {
+            displayTitle
+        }
 
         if (!hideContent) {
             builder.setContentTitle(peekTitle)
@@ -170,8 +171,6 @@ new_style_block = '''        // Prefer the latest actual message content for the
                         .setSummaryText(peekText)
                 )
             } else if (isMessagingStyle || peekText.length > bigTextThreshold) {
-                // Deliberately avoid MessagingStyle here: on Wear OS its initial peek
-                // often shows only the app/conversation name and hides the message body.
                 builder.setStyle(
                     NotificationCompat.BigTextStyle()
                         .setBigContentTitle(peekTitle)
@@ -185,4 +184,4 @@ new_style_block = '''        // Prefer the latest actual message content for the
 w = w[:start] + new_style_block + w[end:]
 wear.write_text(w)
 
-print("Telegram media + Wear immediate-content preview source changes applied")
+print("Telegram media + Xiaomi Watch title-preview source changes applied")
