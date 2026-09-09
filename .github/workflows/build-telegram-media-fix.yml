@@ -1,9 +1,9 @@
-name: Build Telegram media fix
+name: Build HUN field probe
 
 on:
   push:
     branches:
-      - telegram-media-fix-build
+      - hun-field-probe
   workflow_dispatch:
 
 permissions:
@@ -27,6 +27,9 @@ jobs:
       - name: Apply Telegram media source changes
         run: python3 tools/apply_telegram_media_fix.py
 
+      - name: Apply HUN field probe
+        run: python3 tools/apply_hun_field_probe.py
+
       - name: Verify source diff
         run: git diff --check
 
@@ -39,13 +42,13 @@ jobs:
       - name: Upload phone APK
         uses: actions/upload-artifact@v4
         with:
-          name: NotificationMirror-Phone-TelegramMediaFix
+          name: NotificationMirror-Phone-HunFieldProbe
           path: mobile/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Upload watch APK
         uses: actions/upload-artifact@v4
         with:
-          name: NotificationMirror-Watch-TelegramMediaFix
+          name: NotificationMirror-Watch-HunFieldProbe
           path: wear/build/outputs/apk/debug/*.apk
           if-no-files-found: error
