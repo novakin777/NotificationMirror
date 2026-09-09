@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -39,16 +39,53 @@ jobs:
       - name: Build phone and watch debug APKs
         run: ./gradlew --stacktrace :mobile:assembleDebug :wear:assembleDebug
 
+      - name: Prepare named APKs
+        run: |
+          mkdir -p release
+          cp mobile/build/outputs/apk/debug/mobile-debug.apk release/NotificationMirror-Phone-HUN-PrewarmSummary.apk
+          cp wear/build/outputs/apk/debug/wear-debug.apk release/NotificationMirror-Watch-HUN-PrewarmSummary.apk
+
       - name: Upload phone APK
         uses: actions/upload-artifact@v4
         with:
           name: NotificationMirror-Phone-HUN-PrewarmSummary
-          path: mobile/build/outputs/apk/debug/*.apk
+          path: release/NotificationMirror-Phone-HUN-PrewarmSummary.apk
           if-no-files-found: error
 
       - name: Upload watch APK
         uses: actions/upload-artifact@v4
         with:
           name: NotificationMirror-Watch-HUN-PrewarmSummary
-          path: wear/build/outputs/apk/debug/*.apk
+          path: release/NotificationMirror-Watch-HUN-PrewarmSummary.apk
           if-no-files-found: error
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v1.7.1-hun-prewarm.1
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## HUN Prewarm Summary
+
+          Xiaomi Watch / Wear OS compatibility variant based on the working Telegram media build.
+
+          ### What is different
+          This variant keeps per-app group summaries, but tries to create them in advance for applications already known to the watch. Later mirrored notifications update the same summary (`tag + notification ID`) instead of creating a fresh summary at message arrival time.
+
+          Testing on Xiaomi Watch 5 / MiWearSysUI showed that creating a new summary can generate a separate HUN, while updating an already-existing summary does not necessarily trigger another HUN. This variant uses that behavior while preserving Android notification grouping.
+
+          ### Expected behavior
+          - Real child notification still carries the actual text / `BigPictureStyle` media.
+          - Per-app grouping is preserved.
+          - For prewarmed apps, summary updates should avoid replacing the child HUN with a second summary HUN.
+          - On a clean install, an app is not yet in the watch app-label cache, so prewarming may only become effective after that app has been seen once and the watch service is restarted/recreated.
+
+          ### Install
+          Install both APKs from this release: Phone and Watch.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/*.apk --clobber
+            gh release edit "$TAG" --title "NotificationMirror HUN Prewarm Summary" --notes-file release-notes.md
+          else
+            gh release create "$TAG" release/*.apk --target "$GITHUB_SHA" --title "NotificationMirror HUN Prewarm Summary" --notes-file release-notes.md
+          fi
