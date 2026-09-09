@@ -67,7 +67,16 @@ jobs:
           cat > release-notes.md <<'EOF'
           ## HUN Prewarm Summary
 
-          Xiaomi Watch / Wear OS compatibility variant based on the working Telegram media build.
+          Xiaomi Watch / Wear OS compatibility variant based on the working Telegram media release `v1.7.1-telegram-media.1`.
+
+          ### Changes since v1.7.1-telegram-media.1
+          - Added prewarming of per-app group-summary notifications for applications already known to the watch.
+          - Later mirrored notifications update the same summary using the same `tag + notification ID` instead of creating a new summary at message arrival time.
+          - Preserves Android per-app notification grouping, unlike the No Summary variant.
+          - Uses the observed MiWearSysUI behavior where creation of a new summary can trigger its own HUN, while updating an already-existing summary does not necessarily trigger a second HUN.
+          - Keeps the working Telegram media extraction and transport path from the previous release unchanged.
+          - The actual child notification still carries the real text and `BigPictureStyle` media; the summary remains a grouping object rather than the media source.
+          - On a clean install, prewarming cannot cover an app until it has entered the watch app-label cache; a service restart/recreation may be needed before that app benefits from prewarming.
 
           ### What is different
           This variant keeps per-app group summaries, but tries to create them in advance for applications already known to the watch. Later mirrored notifications update the same summary (`tag + notification ID`) instead of creating a fresh summary at message arrival time.
