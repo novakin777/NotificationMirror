@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -39,16 +39,53 @@ jobs:
       - name: Build phone and watch debug APKs
         run: ./gradlew --stacktrace :mobile:assembleDebug :wear:assembleDebug
 
+      - name: Prepare named APKs
+        run: |
+          mkdir -p release
+          cp mobile/build/outputs/apk/debug/mobile-debug.apk release/NotificationMirror-Phone-HUN-NoSummary.apk
+          cp wear/build/outputs/apk/debug/wear-debug.apk release/NotificationMirror-Watch-HUN-NoSummary.apk
+
       - name: Upload phone APK
         uses: actions/upload-artifact@v4
         with:
           name: NotificationMirror-Phone-HUN-NoSummary
-          path: mobile/build/outputs/apk/debug/*.apk
+          path: release/NotificationMirror-Phone-HUN-NoSummary.apk
           if-no-files-found: error
 
       - name: Upload watch APK
         uses: actions/upload-artifact@v4
         with:
           name: NotificationMirror-Watch-HUN-NoSummary
-          path: wear/build/outputs/apk/debug/*.apk
+          path: release/NotificationMirror-Watch-HUN-NoSummary.apk
           if-no-files-found: error
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v1.7.1-hun-nosummary.1
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## HUN No Summary
+
+          Xiaomi Watch / Wear OS compatibility variant based on the working Telegram media build.
+
+          ### What is different
+          This variant completely disables the per-app group-summary notification on the watch. Only the real mirrored child notification is posted.
+
+          On Xiaomi Watch 5 / MiWearSysUI a newly-created group summary can become a second independent StreamItem and trigger its own HUN even when Android flags such as `setSilent(true)`, `PRIORITY_MIN`, or `GROUP_ALERT_CHILDREN` are used. Removing the summary avoids that second HUN entirely.
+
+          ### Expected behavior
+          - One HUN per mirrored notification.
+          - Text notifications use the real child notification.
+          - Telegram photos remain on the proven `BigPictureStyle` child path and can be rendered directly in HUN.
+          - No per-app group-summary card is created on the watch.
+
+          ### Install
+          Install both APKs from this release: Phone and Watch.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/*.apk --clobber
+            gh release edit "$TAG" --title "NotificationMirror HUN No Summary" --notes-file release-notes.md
+          else
+            gh release create "$TAG" release/*.apk --target "$GITHUB_SHA" --title "NotificationMirror HUN No Summary" --notes-file release-notes.md
+          fi
