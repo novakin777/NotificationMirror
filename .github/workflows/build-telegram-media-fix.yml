@@ -67,7 +67,15 @@ jobs:
           cat > release-notes.md <<'EOF'
           ## HUN No Summary
 
-          Xiaomi Watch / Wear OS compatibility variant based on the working Telegram media build.
+          Xiaomi Watch / Wear OS compatibility variant based on the working Telegram media release `v1.7.1-telegram-media.1`.
+
+          ### Changes since v1.7.1-telegram-media.1
+          - Disabled the per-app group-summary notification on the watch side.
+          - Only the real mirrored child notification is posted to Wear OS.
+          - Prevents MiWearSysUI from creating a second HUN for a newly-created summary StreamItem.
+          - Keeps the working Telegram media extraction and transport path from the previous release unchanged.
+          - Keeps Telegram photo notifications on the real child `BigPictureStyle` path, which was verified to render directly in Xiaomi HUN.
+          - Avoids relying on `setSilent(true)`, `PRIORITY_MIN`, or `GROUP_ALERT_CHILDREN`, because Xiaomi still generated a summary HUN with those flags during testing.
 
           ### What is different
           This variant completely disables the per-app group-summary notification on the watch. Only the real mirrored child notification is posted.
