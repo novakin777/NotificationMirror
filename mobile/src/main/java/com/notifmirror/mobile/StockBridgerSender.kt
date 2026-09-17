@@ -108,20 +108,22 @@ object StockBridgerSender {
         return null
     }
 
-    private fun readAndCompressImage(context: Context, uri: Uri): ByteArray? = try {
-        val bitmap = context.contentResolver.openInputStream(uri).use { input ->
-            if (input == null) return null
-            BitmapFactory.decodeStream(input)
-        } ?: return null
-        val scaled = scaleDown(bitmap, 512)
-        val output = ByteArrayOutputStream()
-        scaled.compress(Bitmap.CompressFormat.JPEG, 75, output)
-        if (scaled !== bitmap) scaled.recycle()
-        bitmap.recycle()
-        output.toByteArray()
-    } catch (t: Throwable) {
-        Log.e(TAG, "readAndCompressImage failed uri=$uri", t)
-        null
+    private fun readAndCompressImage(context: Context, uri: Uri): ByteArray? {
+        return try {
+            val bitmap = context.contentResolver.openInputStream(uri).use { input ->
+                if (input == null) return null
+                BitmapFactory.decodeStream(input)
+            } ?: return null
+            val scaled = scaleDown(bitmap, 512)
+            val output = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, 75, output)
+            if (scaled !== bitmap) scaled.recycle()
+            bitmap.recycle()
+            output.toByteArray()
+        } catch (t: Throwable) {
+            Log.e(TAG, "readAndCompressImage failed uri=$uri", t)
+            null
+        }
     }
 
     private fun scaleDown(bitmap: Bitmap, maxSide: Int): Bitmap {
